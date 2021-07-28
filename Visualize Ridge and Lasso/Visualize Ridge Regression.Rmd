@@ -1,0 +1,291 @@
+---
+title: "Visualize Ridge and Lasso Regression"
+author: "FRK"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    toc: TRUE
+    highlight: tango    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.height = 6, fig.width = 9)
+```
+
+## With One Predictor
+
+### Motivation
+
+Ridge and Lasso regression are very important concepts in machine learning and variable selection in case of big data in the fields of biostatistics, genomics, bioinformatics etc.  
+
+This illustration of mine is motivated from [Josh Starmer](https://www.youtube.com/user/joshstarmer)'s [video](https://www.youtube.com/watch?v=Xm2C_gTAl8c&ab_channel=StatQuestwithJoshStarmer) about ridge and lasso regression. I try to recreate the figures on my own to understand the concepts even better.
+
+### Packages
+
+```{r}
+require(dplyr)
+require(ggplot2)
+```
+
+### Data for Regression
+
+We generate simple data using the formula
+
+$$ E[Y|X] =  \beta_1 \times  X$$
+We are ignoring intercept $\beta_o$ for this demonstration. We use $\epsilon ~ N(0,1)$ errors.
+
+```{r}
+x <- 1:100
+y <- 1 * x + rnorm(100, 0, 1)
+```
+
+
+### Ridge SSR
+
+We create a function, that calculates *Sum of Squared Residuals* with a *L2 Norm*. That is 
+
+$$\sum[(y_i - (\beta_1 \times X_i))^2] + \lambda \times  \beta_1^2$$
+
+```{r}
+### Sum of Squared Residuals with L2 Norm Formula
+ssr_ridge <- function(beta_1, Lam){
+  sum((y - (beta_1*x))^2) + (Lam*(beta_1^2))
+}
+```
+
+### Lasso SSR
+
+We create a function, that calculates *Sum of Squared Residuals* with a *L1 Norm*. That is 
+
+$$\sum[(y_i - (\beta_1 \times X_i))^2] + \lambda \times  |\beta_1|$$
+
+```{r}
+### Sum of Squared Residuals with L1 Norm Formula
+ssr_lasso <- function(beta_1, Lam){
+  sum((y - (beta_1*x))^2) + (Lam*abs(beta_1))
+}
+```
+
+### Generate $\beta_1$ and $\lambda$ Value grid for Graphing
+
+```{r}
+### Beta_1 values for graph
+b1 <- ((-2000:2000) / 1000)
+
+### Lambda Values
+lam <- c(0, 50000, 100000, 200000, 300000, 400000, 500000, 600000, 1000000, 5000000, 50000000)
+
+### Combination of Beta_1 and Lambda Values
+B1 <- rep(b1, times = length(lam))
+L  <- rep(lam, each = length(b1))
+d <- data.frame(B1, L)
+head(d)
+```
+
+
+### Calculate Ridge and Lasso Sum of Square for each combination of $\beta_1$ and $\lambda$
+
+Next we mutate the ridge and lasso formula for each row of the dataframe *d*. These are the *Sum of Squared Residuals with Norms and penalty*.
+
+```{r}
+
+d <- d %>% 
+  group_by(B1, L) %>% 
+  mutate(val_ridge = ssr_ridge(B1, L),
+         val_lasso = ssr_lasso(B1, L)) %>%
+  ungroup() 
+```
+
+### Visualize Ridge
+
+```{r}
+d %>%
+  ggplot(aes(B1, val_ridge, color = as.factor(L))) +
+  geom_point(alpha = 0.5, size = 0.3) +
+  theme_minimal() +
+  scale_y_log10() +
+  labs(title = "Beta_1 vs Sum of Squares of Residuals in Simple Regression",
+       subtitle = "L2 Norm used, and for different values of Penalty Lambda",
+       x = "Beta_1",
+       y = "Sum of Squared Residuals with L2 Penalty",
+       color = "Penalty Value") +
+  guides(color = guide_legend(override.aes = list(size = 2)))
+```
+
+### Visualize Lasso
+
+```{r}
+d %>%
+  ggplot(aes(B1, val_lasso, color = as.factor(L))) +
+  geom_point(alpha = 0.5, size = 0.3) +
+  theme_minimal() +
+  scale_y_log10() +
+  labs(title = "Beta_1 vs Sum of Squares of Residuals in Simple Regression",
+       subtitle = "L1 Norm used, and for different values of Penalty Lambda",
+       x = "Beta_1",
+       y = "Sum of Squared Residuals with L1 Penalty",
+       color = "Penalty Value") +
+  guides(color = guide_legend(override.aes = list(size = 2)))
+```
+
+From both plots we can see that the **SSR** reaches it's minimum at a $\beta_1$ value of very close to zero, in case of ridge penalty.  
+
+And **SSR** reaches it's minimum at a $\beta_1$ value of exactly zero, in case of lasso penalty.
+
+### Check at which value of $\beta_1$ SSR Achieves Minimum
+
+```{r}
+### Find the Value of Beta_1, WHen Lambda is Maximum, and SSR_Ridge Minimum
+d %>% 
+  filter(L == max(L)) %>% 
+  filter(val_ridge == min(val_ridge)) 
+
+### Find the Value of Beta_1, WHen Lambda is Maximum, and SSR_Lasso Minimum
+d %>% 
+  filter(L == max(L)) %>% 
+  filter(val_lasso == min(val_lasso)) 
+
+```
+
+### Comment
+
+As we can see, *Lasso* does pushes the value of parameter $\beta_1$ to **exactly zero**. Whereas *Ridge* pushes value of parameter $\beta_1$ **close to zero**.
+
+
+***
+
+
+
+## With Two Predictors
+
+### Data for Regression
+
+We generate simple data using the formula
+
+$$ E[Y|X] =  \beta_1 \times  X_1 + \beta_2 \times X_2$$
+We are ignoring intercept $\beta_o$ for this demonstration. We use $\epsilon ~ N(0,1)$ errors.
+
+```{r}
+x1 <- 1:100
+x2 <- (1:100) / 10
+y <- 1 * x1 + + 2 * x2 + rnorm(100, 0, 1)
+```
+
+
+### Ridge SSR
+
+We create a function, that calculates *Sum of Squared Residuals* with a *L2 Norm*. That is 
+
+$$\sum[(y_i - (\beta_1 \times X_i))^2] + \lambda \times ( \beta_1^2 + \beta_2^2)$$
+
+```{r}
+### Sum of Squared Residuals with L2 Norm Formula
+ssr_ridge <- function(beta_1, beta_2, Lam){
+  sum((y - (beta_1*x1 + beta_2*x2))^2) + (Lam*(beta_1^2 + beta_2^2))
+}
+
+```
+
+### Lasso SSR
+
+We create a function, that calculates *Sum of Squared Residuals* with a *L1 Norm*. That is 
+
+$$\sum[(y_i - (\beta_1 \times X_i))^2] + \lambda \times  (|\beta_1| + |\beta_2|)$$
+
+```{r}
+### Sum of Squared Residuals with L1 Norm Formula
+ssr_lasso <- function(beta_1, beta_2, Lam){
+  sum((y - (beta_1*x1 + beta_2*x2))^2) + (Lam*(abs(beta_1) + abs(beta_2)))
+}
+```
+
+### Generate $\beta_1$, $\beta_2$ & $\lambda$ Value grid for Graphing
+
+```{r}
+### Beta_1 Beta_2 values for graph
+b1 <- (-2000:2000) / 1000
+b2 <- (-1000:3000) / 1000
+
+### Lambda Values
+lam <- c(0, 50000, 100000, 200000, 300000, 400000, 500000, 600000, 1000000, 5000000, 50000000)
+
+### Combination of Beta_1 and Lambda Values
+B1 <- rep(b1, times = length(lam))
+B2 <- rep(b2, times = length(lam))
+L  <- rep(lam, each = length(b1))
+d <- data.frame(B1, B2, L)
+head(d)
+```
+
+
+### Calculate Ridge and Lasso Sum of Square for each combination of $\beta_1$, $\beta_2$ & $\lambda$
+
+Next we mutate the ridge and lasso formula for each row of the dataframe *d*. These are the *Sum of Squared Residuals with Norms and penalty*.
+
+```{r}
+
+d <- d %>% 
+  group_by(B1, B2, L) %>% 
+  mutate(val_ridge = ssr_ridge(B1, B2, L),
+         val_lasso = ssr_lasso(B1, B2, L)) %>%
+  ungroup()
+```
+
+### Visualize Ridge for $\beta_2$
+
+```{r}
+### Visualize Ridge for Beta_2
+d %>%
+  ggplot(aes(B2, val_ridge, color = as.factor(L))) +
+  geom_point(alpha = 0.5, size = 0.3) +
+  theme_minimal() +
+  scale_y_log10() +
+  labs(title = "Beta_2 vs Sum of Squares of Residuals in Simple Regression",
+       subtitle = "L2 Norm used, and for different values of Penalty Lambda",
+       x = "Beta_2",
+       y = "Sum of Squares with L2 Penalty",
+       color = "Penalty Value") +
+  guides(color = guide_legend(override.aes = list(size = 2)))
+```
+
+### Visualize Lasso for $\beta_2$
+
+```{r}
+d %>%
+  ggplot(aes(B2, val_lasso, color = as.factor(L))) +
+  geom_point(alpha = 0.5, size = 0.3) +
+  theme_minimal() +
+  scale_y_log10() +
+  labs(title = "Beta_2 vs Sum of Squares of Residuals in Simple Regression",
+       subtitle = "L1 Norm used, and for different values of Penalty Lambda",
+       x = "Beta_2",
+       y = "Sum of Squares with L1 Penalty",
+       color = "Penalty Value") +
+  guides(color = guide_legend(override.aes = list(size = 2)))
+```
+
+
+### Check at which value of $\beta_2$ SSR Achieves Minimum
+
+```{r}
+### Find the Value of Beta_2, WHen Lambda is Maximum, and SSR_Ridge Minimum
+d %>% 
+  select(-B1) %>% 
+  filter(L == max(L)) %>% 
+  filter(val_ridge == min(val_ridge)) 
+
+### Find the Value of Beta_2, WHen Lambda is Maximum, and SSR_Lasso Minimum
+d %>% 
+  select(-B1) %>% 
+  filter(L == max(L)) %>% 
+  filter(val_lasso == min(val_lasso)) 
+
+```
+
+### Comment
+
+As we can see, *Lasso* & *Ridge* pushes value of parameter $\beta_2$ **close to zero**, but not as closely as they push $\beta_1$. So larger coefficients are shrunk but they don't get close to zero as the smaller coefficients get.
+
+
+***
